@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.env
+schema.json
+schema.compiled.json
+*.egg-info/
+.venv/

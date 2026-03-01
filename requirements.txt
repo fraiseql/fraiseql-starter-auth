@@ -1,0 +1,19 @@
+# requirements.txt — Python dependencies for the FraiseQL auth starter
+#
+# The FraiseQL server itself is a compiled Rust binary with no Python runtime
+# dependencies. These packages are needed for schema authoring and the test suite.
+#
+# Install with:
+#   pip install -r requirements.txt
+
+# FraiseQL Python SDK — schema authoring decorators (@fraiseql.type, @fraiseql.query, etc.)
+fraiseql>=2.0.0
+
+# HTTPX — HTTP client used in tests/ for GraphQL integration test calls
+httpx>=0.27
+
+# python-jose — JWT minting for test fixtures (HS256 for dev/test)
+python-jose[cryptography]>=3.3
+
+# pytest — test runner
+pytest>=8.0

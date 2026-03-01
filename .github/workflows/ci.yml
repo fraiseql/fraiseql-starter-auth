@@ -1,0 +1,135 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ── Job 1: Static validation (no services required) ───────────────────────
+  static-validation:
+    name: Static validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate schema.py syntax
+        run: python -m py_compile schema.py
+
+      - name: Validate fraiseql.toml structure
+        run: |
+          pip install tomli
+          python - <<'EOF'
+          import sys
+          try:
+              import tomllib
+          except ImportError:
+              import tomli as tomllib
+
+          with open("fraiseql.toml", "rb") as f:
+              config = tomllib.load(f)
+
+          required = ["project", "fraiseql", "server", "database"]
+          missing = [s for s in required if s not in config]
+          if missing:
+              print(f"Missing sections in fraiseql.toml: {missing}", file=sys.stderr)
+              sys.exit(1)
+          print("fraiseql.toml OK — sections:", list(config.keys()))
+          EOF
+
+      - name: Validate docker-compose.yml
+        run: docker compose config --quiet
+
+      - name: Assert generated files are gitignored
+        run: |
+          for f in schema.json schema.compiled.json; do
+            if ! grep -qF "$f" .gitignore; then
+              echo "ERROR: $f must be listed in .gitignore" >&2
+              exit 1
+            fi
+          done
+          echo "✅ schema.json and schema.compiled.json are gitignored"
+
+      - name: Assert .env is not tracked
+        run: |
+          if git ls-files --error-unmatch .env 2>/dev/null; then
+            echo "ERROR: .env must not be tracked in git" >&2
+            exit 1
+          fi
+          echo "✅ .env is not tracked"
+
+  # ── Job 2: PostgreSQL integration tests ────────────────────────────────────
+  postgres-integration:
+    name: PostgreSQL integration
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB:       fraiseql_auth
+          POSTGRES_USER:     fraiseql
+          POSTGRES_PASSWORD: dev_password_change_in_prod
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U fraiseql -d fraiseql_auth"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test dependencies
+        run: pip install -r requirements.txt
+
+      - name: Apply schema.sql
+        env:
+          PGPASSWORD: dev_password_change_in_prod
+        run: psql -h localhost -U fraiseql -d fraiseql_auth -f schema.sql
+
+      - name: Run integration tests (server not running — skipped automatically)
+        env:
+          # Tests skip automatically when FRAISEQL_TEST_JWT_SECRET is absent.
+          # Set this secret in repo settings to run against a live server.
+          FRAISEQL_TEST_JWT_SECRET: ${{ secrets.FRAISEQL_TEST_JWT_SECRET }}
+        run: pytest tests/ -v
+
+  # ── Job 3: Full-stack (gated — activate when FraiseQL v2 ships) ────────────
+  full-stack:
+    name: Full-stack (FraiseQL v2)
+    runs-on: ubuntu-latest
+    if: vars.FRAISEQL_V2_AVAILABLE == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install FraiseQL
+        run: pip install fraiseql
+
+      - name: Generate and compile schema
+        run: python schema.py && fraiseql compile
+
+      - name: Start stack
+        run: docker compose up -d --wait
+
+      - name: Run GraphQL integration tests
+        env:
+          FRAISEQL_TEST_JWT_SECRET: ${{ secrets.FRAISEQL_TEST_JWT_SECRET }}
+          FRAISEQL_TEST_BASE_URL: http://localhost:8080
+        run: pytest tests/ -m integration -v
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v

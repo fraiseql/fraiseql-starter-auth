@@ -1,0 +1,113 @@
+# fraiseql.toml — Infrastructure and security configuration
+#
+# This file handles the server and database layer.
+# Query/mutation definitions and inject parameters live in schema.py.
+#
+# Compile workflow:
+#   python schema.py   → schema.json
+#   fraiseql compile   → schema.compiled.json
+
+# ============================================================================
+# Project metadata
+# ============================================================================
+
+[project]
+name            = "fraiseql-auth-example"
+version         = "1.0.0"
+description     = "Multi-tenant auth example with JWT injection and RLS"
+database_target = "postgresql"
+
+# ============================================================================
+# Compilation output
+# ============================================================================
+
+[fraiseql]
+schema_file = "schema.json"
+output_file = "schema.compiled.json"
+
+# ============================================================================
+# Database connection
+#
+# url supports ${VAR} interpolation. If omitted, falls back to DATABASE_URL.
+# ============================================================================
+
+[database]
+url      = "${DATABASE_URL}"
+pool_min = 2
+pool_max = 20
+ssl_mode = "require"          # Enforce TLS to database in production
+
+# ============================================================================
+# HTTP server
+# ============================================================================
+
+[server]
+host               = "0.0.0.0"
+port               = 8080
+request_timeout_ms = 30000
+
+# ============================================================================
+# Security
+#
+# default_policy = "authenticated" means every operation requires a valid JWT
+# unless explicitly overridden. This enforces the inject pattern — if no JWT
+# is present, inject parameters cannot be resolved and the request is rejected.
+#
+# Note: inject parameters (jwt:sub, jwt:tenant_id, etc.) are declared per-query
+# in schema.py. There is no global inject — each query/mutation explicitly
+# states which JWT claims it injects, making security boundaries auditable.
+#
+# JWT verification (issuer, JWKS endpoint, algorithms) is configured via
+# environment variables — there is no [auth] TOML section.
+# ============================================================================
+
+[security]
+default_policy = "authenticated"
+
+[security.error_sanitization]
+enabled                     = true
+hide_implementation_details = true
+sanitize_database_errors    = true
+
+[security.rate_limiting]
+enabled                  = true
+requests_per_second      = 100
+burst_size               = 200
+auth_start_max_requests  = 5
+auth_start_window_secs   = 60
+
+# ============================================================================
+# PKCE / OIDC — OAuth2 Authorization Code flow with PKCE
+#
+# Enable to activate server-managed auth routes:
+#   GET  /auth/start    → redirects to OIDC provider
+#   GET  /auth/callback → exchanges code, issues session
+#
+# Requires FRAISEQL_STATE_ENCRYPTION_KEY env var (32-byte hex):
+#   openssl rand -hex 32
+#
+# The client secret is never stored in this file — only the env var name.
+# ============================================================================
+
+[security.state_encryption]
+enabled   = false
+algorithm = "chacha20-poly1305"
+key_env   = "FRAISEQL_STATE_ENCRYPTION_KEY"
+
+[security.pkce]
+enabled               = false   # set true to activate /auth/start and /auth/callback
+code_challenge_method = "S256"
+state_ttl_secs        = 600
+
+# ============================================================================
+# Query defaults
+#
+# Applied globally to all list queries. Per-query auto_params in schema.py
+# override these on a per-field basis.
+# ============================================================================
+
+[query_defaults]
+where    = true
+order_by = true
+limit    = true
+offset   = false   # prefer cursor pagination for new projects

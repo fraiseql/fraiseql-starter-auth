@@ -1,0 +1,73 @@
+# docker-compose.yml — Local development stack for the FraiseQL auth example.
+#
+# Prerequisites:
+#   python schema.py   → schema.json
+#   fraiseql compile   → schema.compiled.json
+#
+# Then: docker compose up
+#
+# For production, use managed PostgreSQL (RDS, Cloud SQL, etc.) and inject
+# strong credentials via environment variables or a secrets manager.
+# Do NOT use the dev_password_change_in_prod values from this file in production.
+
+services:
+
+  # --------------------------------------------------------------------------
+  # PostgreSQL 16
+  #
+  # The init script (schema.sql) is executed automatically on first startup.
+  # Data is persisted in the named volume `postgres_data` so it survives
+  # `docker compose restart`. Run `docker compose down -v` to reset it.
+  # --------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB:       fraiseql_auth
+      POSTGRES_USER:     fraiseql
+      POSTGRES_PASSWORD: dev_password_change_in_prod
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fraiseql -d fraiseql_auth"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  # --------------------------------------------------------------------------
+  # FraiseQL server
+  #
+  # Uses the pre-built official image. schema.compiled.json and fraiseql.toml
+  # are mounted read-only — compile the schema before starting this service.
+  # --------------------------------------------------------------------------
+  fraiseql:
+    image: ghcr.io/fraiseql/fraiseql:latest
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://fraiseql:dev_password_change_in_prod@postgres:5432/fraiseql_auth
+      # Override with real secrets in production — never hard-code below values.
+      OIDC_CLIENT_SECRET: "${OIDC_CLIENT_SECRET:-replace-me}"
+      FRAISEQL_STATE_ENCRYPTION_KEY: "${FRAISEQL_STATE_ENCRYPTION_KEY:-}"
+    volumes:
+      - ./schema.compiled.json:/app/schema.compiled.json:ro
+      - ./fraiseql.toml:/app/fraiseql.toml:ro
+    working_dir: /app
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+
+# --------------------------------------------------------------------------
+# Volumes
+# --------------------------------------------------------------------------
+volumes:
+  postgres_data:
