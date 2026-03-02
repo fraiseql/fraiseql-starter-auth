@@ -75,6 +75,7 @@ requests_per_second      = 100
 burst_size               = 200
 auth_start_max_requests  = 5
 auth_start_window_secs   = 60
+trust_proxy_headers      = false  # set true when deployed behind a reverse proxy
 
 # ============================================================================
 # PKCE / OIDC — OAuth2 Authorization Code flow with PKCE

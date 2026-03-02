@@ -38,18 +38,18 @@ class Post:
     created_at: DateTime
 
 
-# Error types are regular @fraiseql.type definitions used as mutation error payloads.
-# The SQL function returns status="failed:*" and populates the metadata JSONB field;
-# the FraiseQL runtime copies those fields into the error type automatically.
+# Error types use @fraiseql.error — the SQL function returns status="failed:*"
+# and populates the metadata JSONB field; the FraiseQL runtime copies those
+# fields into the error type automatically.
 
-@fraiseql.type
+@fraiseql.error
 class CreatePostError:
     """Error payload for create_post mutations."""
     code: str                  # "unauthorized" | "invalid_input" | "conflict"
     message: str               # User-friendly error message
 
 
-@fraiseql.type
+@fraiseql.error
 class UpdatePostError:
     """Error payload for update_post mutations."""
     code: str
