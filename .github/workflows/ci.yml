@@ -118,7 +118,9 @@ jobs:
         run: pip install fraiseql
 
       - name: Generate and compile schema
-        run: python schema.py && fraiseql compile
+        run: |
+          python schema.py
+          docker run --rm -v "$(pwd):/work" -w /work ghcr.io/fraiseql/fraiseql:v2.0.0 fraiseql compile
 
       - name: Start stack
         run: docker compose up -d --wait
