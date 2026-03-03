@@ -103,11 +103,10 @@ jobs:
           FRAISEQL_TEST_JWT_SECRET: ${{ secrets.FRAISEQL_TEST_JWT_SECRET }}
         run: pytest tests/ -v
 
-  # ── Job 3: Full-stack (gated — activate when FraiseQL v2 ships) ────────────
+  # ── Job 3: Full-stack ─────────────────────────────────────────────────────
   full-stack:
-    name: Full-stack (FraiseQL v2)
+    name: Full-stack
     runs-on: ubuntu-latest
-    if: vars.FRAISEQL_V2_AVAILABLE == 'true'
     steps:
       - uses: actions/checkout@v4
 

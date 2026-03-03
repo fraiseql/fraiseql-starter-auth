@@ -44,7 +44,7 @@ services:
   # are mounted read-only — compile the schema before starting this service.
   # --------------------------------------------------------------------------
   fraiseql:
-    image: ghcr.io/fraiseql/fraiseql:latest
+    image: ghcr.io/fraiseql/fraiseql:v2.0.0
     depends_on:
       postgres:
         condition: service_healthy
